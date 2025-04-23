@@ -8,4 +8,6 @@ export interface User {
   createdAt: Timestamp
   lastSeen: Timestamp
   status: "online" | "offline"
+  role?: "admin" | "user"
+  typingIn?: string | null // chatId where user is currently typing
 }

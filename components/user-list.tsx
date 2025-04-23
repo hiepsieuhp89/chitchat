@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import type { User } from "@/types/user"
 import type { Chat } from "@/types/chat"
 import { db } from "@/lib/firebase"
-import { collection, doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore"
+import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc } from "firebase/firestore"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { LogOut, Search, MessageCircle, Users, Settings } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { motion, AnimatePresence } from "framer-motion"
 import SettingsPanel from "@/components/settings-panel"
+import { Badge } from "@/components/ui/badge"
 
 interface UserListProps {
   users: User[]
@@ -32,10 +33,21 @@ export default function UserList({
   onSelectUser,
   isMobile = false,
 }: UserListProps) {
-  const { user, signOut } = useAuth()
+  const { user, userRole, signOut } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("chats")
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [userRoles, setUserRoles] = useState<Record<string, "admin" | "user">>({})
+  
+  useEffect(() => {
+    const newRoles: Record<string, "admin" | "user"> = {}
+    users.forEach(u => {
+      if (u.uid && u.role) {
+        newRoles[u.uid] = u.role as "admin" | "user"
+      }
+    })
+    setUserRoles(newRoles)
+  }, [users])
 
   const filteredUsers = users.filter(
     (u) =>
@@ -122,22 +134,33 @@ export default function UserList({
 
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-indigo-50 to-white dark:from-gray-900 dark:to-gray-950">
-      {/* Header */}
+      {/* Header - make it sticky */}
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="flex items-center justify-between border-b bg-white p-4 dark:bg-gray-900 dark:border-gray-800"
+        className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-4 dark:bg-gray-900 dark:border-gray-800"
       >
         <div className="flex items-center gap-2">
           <Avatar className="border-2 border-indigo-200 dark:border-indigo-900">
             <AvatarImage src={user?.photoURL || undefined} />
             <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">
-              {getInitials(user?.displayName)}
+              {getInitials(user?.displayName || "")}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100">{user?.displayName}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{user?.displayName}</h2>
+              {userRole && (
+                <Badge 
+                  variant={userRole as "admin" | "user"} 
+                  size="sm"
+                  className="ml-1"
+                >
+                  {userRole}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs text-indigo-600 dark:text-indigo-400">Online</p>
           </div>
         </div>
@@ -161,12 +184,12 @@ export default function UserList({
         </div>
       </motion.div>
 
-      {/* Search */}
+      {/* Search - also make it sticky */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1, duration: 0.3 }}
-        className="p-3 border-b dark:border-gray-800"
+        className="sticky top-[72px] z-10 p-3 border-b bg-white dark:bg-gray-900 dark:border-gray-800"
       >
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -181,7 +204,12 @@ export default function UserList({
 
       {/* Tabs */}
       <Tabs defaultValue="chats" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.3 }}>
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          transition={{ delay: 0.2, duration: 0.3 }}
+          className="sticky top-[136px] z-10 bg-white dark:bg-gray-900"
+        >
           <TabsList className="grid grid-cols-2 mx-3 mt-2 bg-gray-100 dark:bg-gray-800">
             <TabsTrigger
               value="chats"
@@ -218,6 +246,9 @@ export default function UserList({
                     const otherParticipantInfo = chat.participantsInfo[otherParticipantId]
                     const unreadCount = getUnreadCount(chat)
 
+                    // Get the role from our userRoles state
+                    const otherUserRole = userRoles[otherParticipantId]
+
                     return (
                       <motion.div
                         key={chat.id}
@@ -230,8 +261,25 @@ export default function UserList({
                             : "hover:bg-gray-100 dark:hover:bg-gray-800/50"
                         }`}
                         onClick={() => {
-                          onSelectChat(chat)
-                          onSelectUser(null)
+                          // Create a local copy of the chat with lastMessage.read set to true
+                          // This ensures the UI updates immediately
+                          const updatedChat = { ...chat };
+                          
+                          if (unreadCount > 0 && chat.lastMessage && chat.lastMessage.sender !== user?.uid) {
+                            // Update in Firestore
+                            const chatRef = doc(db, "chats", chat.id);
+                            updateDoc(chatRef, {
+                              "lastMessage.read": true
+                            });
+                            
+                            // Update local state for immediate UI refresh
+                            if (updatedChat.lastMessage) {
+                              updatedChat.lastMessage.read = true;
+                            }
+                          }
+                          
+                          onSelectChat(updatedChat);
+                          onSelectUser(null);
                         }}
                       >
                         <Avatar className={unreadCount > 0 ? "ring-2 ring-indigo-500 dark:ring-indigo-400" : ""}>
@@ -241,34 +289,36 @@ export default function UserList({
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center">
-                            <h3
-                              className={`font-medium truncate ${unreadCount > 0 ? "text-indigo-700 dark:text-indigo-300" : "text-gray-900 dark:text-gray-200"}`}
-                            >
-                              {otherParticipantInfo.displayName}
-                            </h3>
-                            {chat.lastMessage && chat.lastMessage.timestamp && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatTimestamp(chat.lastMessage.timestamp)}
-                              </span>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <h3 className="font-medium text-gray-900 dark:text-gray-200 truncate">
+                                {otherParticipantInfo.displayName}
+                              </h3>
+                              {otherUserRole && (
+                                <Badge 
+                                  variant={otherUserRole as "admin" | "user"}
+                                  size="sm"
+                                >
+                                  {otherUserRole}
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              {chat.lastMessage?.timestamp ? formatTimestamp(chat.lastMessage.timestamp) : ""}
+                            </span>
                           </div>
-                          <div className="flex justify-between items-center">
-                            {chat.lastMessage ? (
-                              <p
-                                className={`text-sm truncate ${unreadCount > 0 ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400"}`}
-                              >
-                                {chat.lastMessage.text}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-gray-500 dark:text-gray-400">Start a conversation</p>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <p className={`text-sm truncate max-w-[180px] ${
+                              unreadCount > 0
+                                ? "text-gray-900 dark:text-gray-200 font-medium"
+                                : "text-gray-500 dark:text-gray-400"
+                            }`}>
+                              {chat.lastMessage?.text || "No messages yet"}
+                            </p>
                             {unreadCount > 0 && (
-                              <motion.span
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="w-2 h-2 bg-indigo-500 rounded-full"
-                              />
+                              <span className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center text-xs font-semibold">
+                                {unreadCount}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -317,8 +367,19 @@ export default function UserList({
                           {getInitials(u.displayName)}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-gray-200">{u.displayName}</h3>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center">
+                          <h3 className="font-medium text-gray-900 dark:text-gray-200 truncate">{u.displayName}</h3>
+                          {u.role && (
+                            <Badge 
+                              variant={u.role as "admin" | "user"}
+                              size="sm"
+                              className="ml-2"
+                            >
+                              {u.role}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1">
                           <motion.div
                             animate={{

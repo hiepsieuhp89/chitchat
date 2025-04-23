@@ -1,66 +1,66 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useRef, useCallback } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import type { Chat } from "@/types/chat"
-import type { User } from "@/types/user"
-import type { Message, Attachment } from "@/types/message"
-import { db } from "@/lib/firebase"
+import EmojiPicker from "@/components/emoji-picker";
+import MessageItem from "@/components/message-item";
+import RichTextEditor from "@/components/rich-text-editor";
+import SettingsPanel from "@/components/settings-panel";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase";
+import { uploadToImageKit } from "@/lib/imagekit";
+import { uploadToImgur } from "@/lib/imgur";
+import type { Chat } from "@/types/chat";
+import type { Attachment, Message } from "@/types/message";
+import type { User } from "@/types/user";
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
   addDoc,
-  updateDoc,
+  collection,
   doc,
-  serverTimestamp,
   getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
   setDoc,
-} from "firebase/firestore"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Send,
-  ImageIcon,
-  File,
-  Mic,
-  Smile,
+  ArrowLeft,
   Edit,
-  X,
-  Settings,
+  File,
+  ImageIcon,
   Loader2,
-  Video,
-  XCircle,
+  MessageCircle,
+  Mic,
   Pause,
   Play,
-  ArrowLeft,
-} from "lucide-react"
-import { v4 as uuidv4 } from "uuid"
-import MessageItem from "@/components/message-item"
-import RichTextEditor from "@/components/rich-text-editor"
-import EmojiPicker from "@/components/emoji-picker"
-import { uploadToImgur } from "@/lib/imgur"
-import { uploadToImageKit } from "@/lib/imagekit"
-import { motion, AnimatePresence } from "framer-motion"
-import { MessageCircle } from "lucide-react"
-import SettingsPanel from "@/components/settings-panel"
-import { toast } from "@/components/ui/use-toast"
+  Send,
+  Settings,
+  Smile,
+  Video,
+  X,
+  XCircle,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 
 interface ChatInterfaceProps {
-  selectedChat: Chat | null
-  selectedUser: User | null
-  setSelectedChat: (chat: Chat | null) => void
-  isMobile?: boolean
-  onBackToList?: () => void
+  selectedChat: Chat | null;
+  selectedUser: User | null;
+  setSelectedChat: (chat: Chat | null) => void;
+  isMobile?: boolean;
+  onBackToList?: () => void;
 }
 
 interface UploadingAttachment extends Attachment {
-  isUploading: boolean
-  progress: number
-  localUrl?: string
+  isUploading: boolean;
+  progress: number;
+  localUrl?: string;
 }
 
 export default function ChatInterface({
@@ -70,61 +70,72 @@ export default function ChatInterface({
   isMobile = false,
   onBackToList,
 }: ChatInterfaceProps) {
-  const { user } = useAuth()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [messageText, setMessageText] = useState("")
-  const [richText, setRichText] = useState("")
-  const [isUsingRichText, setIsUsingRichText] = useState(false)
-  const [attachments, setAttachments] = useState<UploadingAttachment[]>([])
-  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
-  const [editingMessage, setEditingMessage] = useState<Message | null>(null)
-  const [isRecording, setIsRecording] = useState(false)
-  const [audioRecorder, setAudioRecorder] = useState<MediaRecorder | null>(null)
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const audioNotificationRef = useRef<HTMLAudioElement>(null)
-  const audioPreviewRef = useRef<HTMLAudioElement | null>(null)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false)
-  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false)
-  const initialRenderRef = useRef(true)
+  const { user, userRole } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageText, setMessageText] = useState("");
+  const [richText, setRichText] = useState("");
+  const [isUsingRichText, setIsUsingRichText] = useState(false);
+  const [attachments, setAttachments] = useState<UploadingAttachment[]>([]);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioRecorder, setAudioRecorder] = useState<MediaRecorder | null>(
+    null
+  );
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioNotificationRef = useRef<HTMLAudioElement>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  const initialRenderRef = useRef(true);
+
+  // Check if user is admin
+  const isAdmin = userRole === "admin";
 
   // Function to scroll to bottom - defined with useCallback to avoid recreation on every render
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-      setHasScrolledToBottom(true)
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      setHasScrolledToBottom(true);
     }
-  }, [])
+  }, []);
 
   // Create a chat if selectedUser is set
   useEffect(() => {
-    let unsubscribe: () => void = () => {}
+    let unsubscribe: () => void = () => {};
 
     if (selectedUser && user) {
       // Check if chat already exists
-      const chatsRef = collection(db, "chats")
-      const q = query(chatsRef, where("participants", "array-contains", user.uid))
+      const chatsRef = collection(db, "chats");
+      const q = query(
+        chatsRef,
+        where("participants", "array-contains", user.uid)
+      );
 
       unsubscribe = onSnapshot(q, (snapshot) => {
         const existingChat = snapshot.docs.find((doc) => {
-          const chatData = doc.data()
-          return chatData.participants.includes(selectedUser.uid)
-        })
+          const chatData = doc.data();
+          return chatData.participants.includes(selectedUser.uid);
+        });
 
         if (existingChat) {
-          setSelectedChat({ id: existingChat.id, ...existingChat.data() } as Chat)
-          return
+          setSelectedChat({
+            id: existingChat.id,
+            ...existingChat.data(),
+          } as Chat);
+          return;
         }
 
         // Create a new chat
         const createNewChat = async () => {
           try {
-            const newChatRef = doc(collection(db, "chats"))
+            const newChatRef = doc(collection(db, "chats"));
             const newChat = {
               participants: [user.uid, selectedUser.uid],
               participantsInfo: {
@@ -139,192 +150,240 @@ export default function ChatInterface({
               },
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
-            }
+            };
 
-            await setDoc(newChatRef, newChat)
+            await setDoc(newChatRef, newChat);
 
             // Get the created chat
-            const chatSnapshot = await getDoc(newChatRef)
+            const chatSnapshot = await getDoc(newChatRef);
             if (chatSnapshot.exists()) {
-              const createdChat = { id: chatSnapshot.id, ...chatSnapshot.data() } as Chat
-              setSelectedChat(createdChat)
+              const createdChat = {
+                id: chatSnapshot.id,
+                ...chatSnapshot.data(),
+              } as Chat;
+              setSelectedChat(createdChat);
             }
           } catch (error) {
-            console.error("Error creating chat:", error)
+            console.error("Error creating chat:", error);
           }
-        }
+        };
 
-        createNewChat()
-      })
+        createNewChat();
+      });
     }
 
-    return () => unsubscribe()
-  }, [selectedUser, user, setSelectedChat])
+    return () => unsubscribe();
+  }, [selectedUser, user, setSelectedChat]);
 
   // Fetch messages when a chat is selected
   useEffect(() => {
     if (!selectedChat) {
-      setMessages([])
-      return
+      setMessages([]);
+      return;
     }
 
     // Reset scroll state when changing chats
-    setHasScrolledToBottom(false)
-    setShouldScrollToBottom(true)
+    setHasScrolledToBottom(false);
+    setShouldScrollToBottom(true);
 
-    const q = query(collection(db, "messages"), where("chatId", "==", selectedChat.id), orderBy("timestamp", "asc"))
+    // Immediately mark lastMessage as read when chat is selected
+    if (
+      user &&
+      selectedChat.lastMessage &&
+      selectedChat.lastMessage.sender !== user.uid &&
+      !selectedChat.lastMessage.read
+    ) {
+      try {
+        const chatRef = doc(db, "chats", selectedChat.id);
+        updateDoc(chatRef, {
+          "lastMessage.read": true,
+        });
+      } catch (error) {
+        console.error("Error marking last message as read:", error);
+      }
+    }
+
+    const q = query(
+      collection(db, "messages"),
+      where("chatId", "==", selectedChat.id),
+      orderBy("timestamp", "asc")
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messagesList: Message[] = []
+      const messagesList: Message[] = [];
       snapshot.forEach((doc) => {
-        messagesList.push({ id: doc.id, ...doc.data() } as Message)
-      })
-      setMessages(messagesList)
+        messagesList.push({ id: doc.id, ...doc.data() } as Message);
+      });
+      setMessages(messagesList);
 
       // Play notification sound for new messages
-      const lastMessage = messagesList[messagesList.length - 1]
-      if (lastMessage && user && lastMessage.sender !== user.uid && !lastMessage.readBy.includes(user.uid)) {
-        audioNotificationRef.current?.play()
+      const lastMessage = messagesList[messagesList.length - 1];
+      if (
+        lastMessage &&
+        user &&
+        lastMessage.sender !== user.uid &&
+        !lastMessage.readBy.includes(user.uid)
+      ) {
+        audioNotificationRef.current?.play();
       }
 
       // Mark messages as read
       if (user) {
         messagesList.forEach((message) => {
-          if (message.sender !== user.uid && !message.readBy.includes(user.uid)) {
+          if (
+            message.sender !== user.uid &&
+            !message.readBy.includes(user.uid)
+          ) {
             const markAsRead = async () => {
               try {
-                const messageRef = doc(db, "messages", message.id)
+                const messageRef = doc(db, "messages", message.id);
                 await updateDoc(messageRef, {
                   readBy: [...message.readBy, user.uid],
-                })
+                });
 
                 // Update last message in chat if it's this message
-                if (selectedChat.lastMessage && selectedChat.lastMessage.timestamp?.isEqual?.(message.timestamp)) {
-                  const chatRef = doc(db, "chats", selectedChat.id)
+                if (
+                  selectedChat.lastMessage &&
+                  selectedChat.lastMessage.timestamp?.isEqual?.(
+                    message.timestamp
+                  )
+                ) {
+                  const chatRef = doc(db, "chats", selectedChat.id);
                   await updateDoc(chatRef, {
                     "lastMessage.read": true,
-                  })
+                  });
                 }
               } catch (error) {
-                console.error("Error marking message as read:", error)
+                console.error("Error marking message as read:", error);
               }
-            }
-            markAsRead()
+            };
+            markAsRead();
           }
-        })
+        });
       }
 
       // Set flag to scroll to bottom with new messages
-      setShouldScrollToBottom(true)
-    })
+      setShouldScrollToBottom(true);
+    });
 
-    return () => unsubscribe()
-  }, [selectedChat, user])
+    return () => unsubscribe();
+  }, [selectedChat, user]);
 
   // Handle scrolling to bottom when messages change
   useEffect(() => {
-    if (!shouldScrollToBottom) return
+    if (!shouldScrollToBottom) return;
 
     // Check if there are images in the messages
-    const hasImages = messages.some((message) => message.attachments?.some((attachment) => attachment.type === "image"))
+    const hasImages = messages.some((message) =>
+      message.attachments?.some((attachment) => attachment.type === "image")
+    );
 
     if (hasImages) {
       // If there are images, we need to wait for them to load
       const timer = setTimeout(() => {
-        scrollToBottom()
-        setShouldScrollToBottom(false)
-      }, 500) // Adjust timeout as needed
-      return () => clearTimeout(timer)
+        scrollToBottom();
+        setShouldScrollToBottom(false);
+      }, 500); // Adjust timeout as needed
+      return () => clearTimeout(timer);
     } else {
       // If no images, scroll immediately
-      scrollToBottom()
-      setShouldScrollToBottom(false)
+      scrollToBottom();
+      setShouldScrollToBottom(false);
     }
-  }, [messages, shouldScrollToBottom, scrollToBottom])
+  }, [messages, shouldScrollToBottom, scrollToBottom]);
 
   // Handle audio recording
   useEffect(() => {
     if (isRecording && !audioRecorder) {
       const startRecording = async () => {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-          const recorder = new MediaRecorder(stream)
-          const chunks: Blob[] = []
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          const recorder = new MediaRecorder(stream);
+          const chunks: Blob[] = [];
 
           recorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
-              chunks.push(e.data)
-              setAudioChunks([...chunks])
+              chunks.push(e.data);
+              setAudioChunks([...chunks]);
             }
-          }
+          };
 
-          recorder.start()
-          setAudioRecorder(recorder)
+          recorder.start();
+          setAudioRecorder(recorder);
         } catch (error) {
-          console.error("Error starting audio recording:", error)
-          setIsRecording(false)
+          console.error("Error starting audio recording:", error);
+          setIsRecording(false);
           toast({
             title: "Recording Error",
-            description: "Could not access microphone. Please check permissions.",
+            description:
+              "Could not access microphone. Please check permissions.",
             variant: "destructive",
-          })
+          });
         }
-      }
+      };
 
-      startRecording()
+      startRecording();
     } else if (!isRecording && audioRecorder) {
-      audioRecorder.stop()
+      audioRecorder.stop();
 
       // Clean up
-      audioRecorder.stream.getTracks().forEach((track) => track.stop())
-      setAudioRecorder(null)
+      audioRecorder.stream.getTracks().forEach((track) => track.stop());
+      setAudioRecorder(null);
     }
-  }, [isRecording, audioRecorder])
+  }, [isRecording, audioRecorder]);
 
   // Create audio preview when recording stops
   useEffect(() => {
     // Only create a new preview URL if we have audio chunks and we're not recording
     if (audioChunks.length > 0 && !isRecording && !audioPreviewUrl) {
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
-      const url = URL.createObjectURL(audioBlob)
-      setAudioPreviewUrl(url)
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+      const url = URL.createObjectURL(audioBlob);
+      setAudioPreviewUrl(url);
     }
 
     // Cleanup function
     return () => {
       // No cleanup needed here - we'll handle URL revocation separately
-    }
-  }, [audioChunks, isRecording, audioPreviewUrl])
+    };
+  }, [audioChunks, isRecording, audioPreviewUrl]);
 
   // Clean up audio preview when component unmounts or when preview is cleared
   useEffect(() => {
     return () => {
       if (audioPreviewUrl) {
-        URL.revokeObjectURL(audioPreviewUrl)
+        URL.revokeObjectURL(audioPreviewUrl);
       }
-    }
-  }, [audioPreviewUrl])
+    };
+  }, [audioPreviewUrl]);
 
   // Handle initial render
   useEffect(() => {
-    initialRenderRef.current = false
-  }, [])
+    initialRenderRef.current = false;
+  }, []);
 
   const handleSendMessage = async () => {
-    if ((!messageText.trim() && !richText.trim() && attachments.length === 0) || !selectedChat || !user) return
+    if (
+      (!messageText.trim() && !richText.trim() && attachments.length === 0) ||
+      !selectedChat ||
+      !user
+    )
+      return;
 
     try {
       // Filter out any attachments that are still uploading
       const readyAttachments = attachments
         .filter((att) => !att.isUploading)
-        .map(({ isUploading, progress, localUrl, ...rest }) => rest)
+        .map(({ isUploading, progress, localUrl, ...rest }) => rest);
 
       if (attachments.some((att) => att.isUploading)) {
         toast({
           title: "Uploads in progress",
-          description: "Some attachments are still uploading. They will be added when ready.",
+          description:
+            "Some attachments are still uploading. They will be added when ready.",
           variant: "default",
-        })
+        });
       }
 
       // Create base message data
@@ -333,180 +392,296 @@ export default function ChatInterface({
         sender: user.uid,
         status: "sent",
         readBy: [user.uid],
-      }
+      };
 
       // Add text content based on mode
       if (isUsingRichText) {
-        messageData.text = ""
-        messageData.richText = richText
+        messageData.text = "";
+        messageData.richText = richText;
       } else {
-        messageData.text = messageText
+        messageData.text = messageText;
       }
 
       // Add attachments if any
       if (readyAttachments.length > 0) {
-        messageData.attachments = readyAttachments
+        messageData.attachments = readyAttachments;
       }
 
-      const sanitizedAttachments = messageData.attachments?.map((attachment: any) => {
-        return Object.fromEntries(Object.entries(attachment).filter(([_, v]) => v !== undefined))
-      })
+      const sanitizedAttachments = messageData.attachments?.map(
+        (attachment: any) => {
+          return Object.fromEntries(
+            Object.entries(attachment).filter(([_, v]) => v !== undefined)
+          );
+        }
+      );
 
       const sanitizedMessageData = {
         ...messageData,
         attachments: sanitizedAttachments ? sanitizedAttachments : [],
-      }
+      };
 
       await addDoc(collection(db, "messages"), {
         ...sanitizedMessageData,
         timestamp: serverTimestamp(),
-      })
+      });
 
       // Update last message in chat
-      const chatRef = doc(db, "chats", selectedChat.id)
+      const chatRef = doc(db, "chats", selectedChat.id);
       await updateDoc(chatRef, {
         lastMessage: {
           text: isUsingRichText
             ? "Rich text message"
-            : messageText || (readyAttachments.length > 0 ? `Sent ${readyAttachments.length} attachment(s)` : ""),
+            : messageText ||
+              (readyAttachments.length > 0
+                ? `Sent ${readyAttachments.length} attachment(s)`
+                : ""),
           sender: user.uid,
           timestamp: serverTimestamp(),
           read: false,
         },
         updatedAt: serverTimestamp(),
-      })
+      });
 
       // Reset state
-      setMessageText("")
-      setRichText("")
-      setAttachments([])
-      setIsUsingRichText(false)
-      setIsEmojiPickerOpen(false)
-      setAudioPreviewUrl(null)
-      setAudioChunks([])
-      setShouldScrollToBottom(true)
+      setMessageText("");
+      setRichText("");
+      setAttachments([]);
+      setIsUsingRichText(false);
+      setIsEmojiPickerOpen(false);
+      setAudioPreviewUrl(null);
+      setAudioChunks([]);
+      setShouldScrollToBottom(true);
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("Error sending message:", error);
       toast({
         title: "Error",
         description: "Failed to send message. Please try again.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleEditMessage = async () => {
-    if (!editingMessage || !user || !selectedChat) return
+    if (!editingMessage || !user || !selectedChat || !isAdmin) return;
 
     try {
-      const messageRef = doc(db, "messages", editingMessage.id)
+      const messageRef = doc(db, "messages", editingMessage.id);
+
+      // Determine the updated text content
+      const updatedText = isUsingRichText ? "Rich text message" : messageText;
+
       await updateDoc(messageRef, {
         text: isUsingRichText ? "" : messageText,
         richText: isUsingRichText ? richText : null,
         edited: true,
         editedAt: serverTimestamp(),
-      })
+      });
+
+      // Check if this was the last message in the chat
+      // If so, update the lastMessage in the chat document
+      const chatRef = doc(db, "chats", selectedChat.id);
+      const chatDoc = await getDoc(chatRef);
+
+      if (chatDoc.exists()) {
+        const chatData = chatDoc.data();
+
+        // If the last message timestamp matches this message's timestamp, update it
+        if (
+          chatData.lastMessage &&
+          chatData.lastMessage.timestamp &&
+          editingMessage.timestamp
+        ) {
+          // Keep the original read status and sender
+          const readStatus = chatData.lastMessage.read || false;
+          await updateDoc(chatRef, {
+            lastMessage: {
+              text: updatedText,
+              sender: editingMessage.sender,
+              timestamp: editingMessage.timestamp,
+              read: readStatus,
+              edited: true,
+            },
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
 
       // Reset state
-      setMessageText("")
-      setRichText("")
-      setEditingMessage(null)
-      setIsUsingRichText(false)
+      setMessageText("");
+      setRichText("");
+      setEditingMessage(null);
+      setIsUsingRichText(false);
 
       toast({
         title: "Message updated",
         description: "Your message has been edited successfully.",
         variant: "default",
-      })
+      });
     } catch (error) {
-      console.error("Error editing message:", error)
+      console.error("Error editing message:", error);
       toast({
         title: "Error",
         description: "Failed to edit message. Please try again.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleCancelEdit = () => {
-    setMessageText("")
-    setRichText("")
-    setEditingMessage(null)
-    setIsUsingRichText(false)
-  }
+    setMessageText("");
+    setRichText("");
+    setEditingMessage(null);
+    setIsUsingRichText(false);
+  };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!user || !selectedChat) return
+    if (!user || !selectedChat) return;
 
     try {
-      const messageRef = doc(db, "messages", messageId)
+      const messageRef = doc(db, "messages", messageId);
+      const messageDoc = await getDoc(messageRef);
+
+      if (!messageDoc.exists()) {
+        throw new Error("Message not found");
+      }
+
+      const messageData = messageDoc.data() as Message;
+
       await updateDoc(messageRef, {
         text: "This message was deleted",
         richText: null,
         attachments: [],
         status: "deleted",
-      })
+      });
+
+      // Check if this was the last message in the chat
+      const chatRef = doc(db, "chats", selectedChat.id);
+      const chatDoc = await getDoc(chatRef);
+
+      if (chatDoc.exists()) {
+        const chatData = chatDoc.data();
+
+        // If the last message timestamp matches this message's timestamp, update it
+        if (
+          chatData.lastMessage &&
+          chatData.lastMessage.timestamp &&
+          messageData.timestamp &&
+          chatData.lastMessage.timestamp.isEqual(messageData.timestamp)
+        ) {
+          // Keep the read status from the original message
+          const readStatus = chatData.lastMessage.read || false;
+
+          await updateDoc(chatRef, {
+            lastMessage: {
+              text: "This message was deleted",
+              sender: messageData.sender,
+              timestamp: messageData.timestamp,
+              read: readStatus,
+              status: "deleted",
+            },
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
 
       toast({
         title: "Message deleted",
         description: "Your message has been deleted.",
         variant: "default",
-      })
+      });
     } catch (error) {
-      console.error("Error deleting message:", error)
+      console.error("Error deleting message:", error);
       toast({
         title: "Error",
         description: "Failed to delete message. Please try again.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleRecallMessage = async (messageId: string) => {
-    if (!user || !selectedChat) return
+    if (!user || !selectedChat) return;
 
     try {
-      const messageRef = doc(db, "messages", messageId)
+      const messageRef = doc(db, "messages", messageId);
+      const messageDoc = await getDoc(messageRef);
+
+      if (!messageDoc.exists()) {
+        throw new Error("Message not found");
+      }
+
+      const messageData = messageDoc.data() as Message;
+
       await updateDoc(messageRef, {
         text: "This message was recalled",
         richText: null,
         attachments: [],
         status: "recalled",
-      })
+      });
+
+      // Check if this was the last message in the chat
+      const chatRef = doc(db, "chats", selectedChat.id);
+      const chatDoc = await getDoc(chatRef);
+
+      if (chatDoc.exists()) {
+        const chatData = chatDoc.data();
+
+        // If the last message timestamp matches this message's timestamp, update it
+        if (
+          chatData.lastMessage &&
+          chatData.lastMessage.timestamp &&
+          messageData.timestamp &&
+          chatData.lastMessage.timestamp.isEqual(messageData.timestamp)
+        ) {
+          // Keep the read status from the original message
+          const readStatus = chatData.lastMessage.read || false;
+
+          await updateDoc(chatRef, {
+            lastMessage: {
+              text: "This message was recalled",
+              sender: messageData.sender,
+              timestamp: messageData.timestamp,
+              read: readStatus,
+              status: "recalled",
+            },
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
 
       toast({
         title: "Message recalled",
         description: "Your message has been recalled.",
         variant: "default",
-      })
+      });
     } catch (error) {
-      console.error("Error recalling message:", error)
+      console.error("Error recalling message:", error);
       toast({
         title: "Error",
         description: "Failed to recall message. Please try again.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleFileUpload = async (files: FileList) => {
-    if (!user || !selectedChat) return
+    if (!user || !selectedChat) return;
 
     for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const fileId = uuidv4()
+      const file = files[i];
+      const fileId = uuidv4();
 
       // Create a local URL for preview
-      const localUrl = URL.createObjectURL(file)
+      const localUrl = URL.createObjectURL(file);
 
       // Determine file type
-      let type: Attachment["type"] = "file"
+      let type: "image" | "audio" | "file" | "sticker" | "video" = "file";
       if (file.type.startsWith("image/")) {
-        type = "image"
+        type = "image";
       } else if (file.type.startsWith("audio/")) {
-        type = "audio"
+        type = "audio";
       } else if (file.type.startsWith("video/")) {
-        type = "video"
+        type = "video";
       }
 
       // Add a temporary attachment with upload status
@@ -519,25 +694,25 @@ export default function ChatInterface({
         isUploading: true,
         progress: 0,
         localUrl,
-      }
+      };
 
-      setAttachments((prev) => [...prev, tempAttachment])
+      setAttachments((prev) => [...prev, tempAttachment]);
 
       try {
-        let url = ""
+        let url = "";
 
         if (type === "image") {
           // Use Imgur for images
-          url = await uploadToImgur(file)
+          url = await uploadToImgur(file);
         } else {
           // Try ImageKit first, but it will fall back to Firebase if needed
-          url = await uploadToImageKit(file)
+          url = await uploadToImageKit(file);
         }
 
         // Get audio duration if needed
-        let duration: number | undefined = undefined
+        let duration: number | undefined = undefined;
         if (type === "audio") {
-          duration = await getAudioDuration(file)
+          duration = await getAudioDuration(file);
         }
 
         // Update the attachment with the real URL
@@ -551,59 +726,61 @@ export default function ChatInterface({
                   progress: 100,
                   duration,
                 }
-              : att,
-          ),
-        )
+              : att
+          )
+        );
 
         // Revoke the object URL to free memory
-        URL.revokeObjectURL(localUrl)
+        URL.revokeObjectURL(localUrl);
       } catch (error) {
-        console.error("Error uploading file:", error)
+        console.error("Error uploading file:", error);
         toast({
           title: "Upload failed",
           description: `Failed to upload ${file.name}. Please try again.`,
           variant: "destructive",
-        })
+        });
 
         // Update the attachment to show the error
-        setAttachments((prev) => prev.filter((att) => att.localUrl !== localUrl))
+        setAttachments((prev) =>
+          prev.filter((att) => att.localUrl !== localUrl)
+        );
 
         // Revoke the object URL to free memory
-        URL.revokeObjectURL(localUrl)
+        URL.revokeObjectURL(localUrl);
       }
     }
-  }
+  };
 
   const getAudioDuration = (blob: Blob | File): Promise<number> => {
     return new Promise((resolve) => {
-      const audio = new Audio()
-      audio.src = URL.createObjectURL(blob)
+      const audio = new Audio();
+      audio.src = URL.createObjectURL(blob);
 
       audio.addEventListener("loadedmetadata", () => {
-        resolve(audio.duration)
-        URL.revokeObjectURL(audio.src)
-      })
+        resolve(audio.duration);
+        URL.revokeObjectURL(audio.src);
+      });
 
       audio.addEventListener("error", () => {
-        resolve(0)
-        URL.revokeObjectURL(audio.src)
-      })
-    })
-  }
+        resolve(0);
+        URL.revokeObjectURL(audio.src);
+      });
+    });
+  };
 
   const handleUploadAudioRecording = async () => {
-    if (audioChunks.length === 0 || !selectedChat || !user) return
+    if (audioChunks.length === 0 || !selectedChat || !user) return;
 
-    const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
-    const fileName = `recording_${new Date().getTime()}.webm`
-    const localUrl = audioPreviewUrl || URL.createObjectURL(audioBlob)
+    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+    const fileName = `recording_${new Date().getTime()}.webm`;
+    const localUrl = audioPreviewUrl || URL.createObjectURL(audioBlob);
 
     // Get audio duration
-    let duration = 0
+    let duration = 0;
     if (audioPreviewRef.current) {
-      duration = audioPreviewRef.current.duration
+      duration = audioPreviewRef.current.duration;
     } else {
-      duration = await getAudioDuration(audioBlob)
+      duration = await getAudioDuration(audioBlob);
     }
 
     // Add a temporary attachment with upload status
@@ -617,13 +794,13 @@ export default function ChatInterface({
       progress: 0,
       localUrl,
       duration,
-    }
+    };
 
-    setAttachments((prev) => [...prev, tempAttachment])
+    setAttachments((prev) => [...prev, tempAttachment]);
 
     try {
       // Try ImageKit first, but it will fall back to Firebase if needed
-      const url = await uploadToImageKit(audioBlob, fileName)
+      const url = await uploadToImageKit(audioBlob, fileName);
 
       // Update the attachment with the real URL
       setAttachments((prev) =>
@@ -635,54 +812,56 @@ export default function ChatInterface({
                 isUploading: false,
                 progress: 100,
               }
-            : att,
-        ),
-      )
+            : att
+        )
+      );
 
       // Reset audio state
-      setAudioChunks([])
-      setAudioPreviewUrl(null)
-      setIsAudioPlaying(false)
+      setAudioChunks([]);
+      setAudioPreviewUrl(null);
+      setIsAudioPlaying(false);
       if (audioPreviewRef.current) {
-        audioPreviewRef.current.pause()
-        audioPreviewRef.current.currentTime = 0
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current.currentTime = 0;
       }
 
       toast({
         title: "Audio uploaded",
         description: "Your audio recording has been uploaded successfully.",
         variant: "default",
-      })
+      });
     } catch (error) {
-      console.error("Error uploading audio recording:", error)
+      console.error("Error uploading audio recording:", error);
       toast({
         title: "Upload failed",
         description: "Failed to upload audio recording. Please try again.",
         variant: "destructive",
-      })
+      });
 
       // Remove the failed attachment
-      setAttachments((prev) => prev.filter((att) => att.localUrl !== localUrl))
+      setAttachments((prev) => prev.filter((att) => att.localUrl !== localUrl));
     }
-  }
+  };
 
   const handleAddEmoji = (emoji: string) => {
     if (isUsingRichText) {
-      setRichText(richText + emoji)
+      setRichText(richText + emoji);
     } else {
-      setMessageText(messageText + emoji)
+      setMessageText(messageText + emoji);
     }
-    setIsEmojiPickerOpen(false)
-  }
+    setIsEmojiPickerOpen(false);
+  };
 
   const getOtherParticipantInfo = () => {
-    if (!selectedChat || !user) return null
+    if (!selectedChat || !user) return null;
 
-    const otherParticipantId = selectedChat.participants.find((id) => id !== user.uid)
-    if (!otherParticipantId) return null
+    const otherParticipantId = selectedChat.participants.find(
+      (id) => id !== user.uid
+    );
+    if (!otherParticipantId) return null;
 
-    return selectedChat.participantsInfo[otherParticipantId]
-  }
+    return selectedChat.participantsInfo[otherParticipantId];
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -690,25 +869,25 @@ export default function ChatInterface({
       .map((part) => part[0])
       .join("")
       .toUpperCase()
-      .substring(0, 2)
-  }
+      .substring(0, 2);
+  };
 
   const toggleAudioPlayback = () => {
-    if (!audioPreviewRef.current || !audioPreviewUrl) return
+    if (!audioPreviewRef.current || !audioPreviewUrl) return;
 
     if (isAudioPlaying) {
-      audioPreviewRef.current.pause()
+      audioPreviewRef.current.pause();
     } else {
-      audioPreviewRef.current.play()
+      audioPreviewRef.current.play();
     }
-    setIsAudioPlaying(!isAudioPlaying)
-  }
+    setIsAudioPlaying(!isAudioPlaying);
+  };
 
   const handleAudioEnded = () => {
-    setIsAudioPlaying(false)
-  }
+    setIsAudioPlaying(false);
+  };
 
-  const otherParticipant = getOtherParticipantInfo()
+  const otherParticipant = getOtherParticipantInfo();
 
   if (!selectedChat) {
     return (
@@ -738,11 +917,12 @@ export default function ChatInterface({
             Select a chat to start messaging
           </h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Choose an existing conversation or start a new one by selecting a user from the list
+            Choose an existing conversation or start a new one by selecting a
+            user from the list
           </p>
         </motion.div>
       </div>
-    )
+    );
   }
 
   return (
@@ -757,19 +937,30 @@ export default function ChatInterface({
         {otherParticipant && (
           <div className="flex items-center gap-3">
             {isMobile && onBackToList && (
-              <Button variant="ghost" size="icon" onClick={onBackToList} className="mr-2 md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onBackToList}
+                className="mr-2 md:hidden"
+              >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
             <Avatar className="border-2 border-indigo-200 dark:border-indigo-900">
-              <AvatarImage src={otherParticipant.photoURL || "/placeholder.svg"} />
+              <AvatarImage
+                src={otherParticipant.photoURL || "/placeholder.svg"}
+              />
               <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">
                 {getInitials(otherParticipant.displayName)}
               </AvatarFallback>
             </Avatar>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{otherParticipant.displayName}</h2>
-              <p className="text-xs text-indigo-600 dark:text-indigo-400">Online</p>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {otherParticipant.displayName}
+              </h2>
+              <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                Online
+              </p>
             </div>
           </div>
         )}
@@ -785,7 +976,13 @@ export default function ChatInterface({
       </motion.div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+        style={{
+          maxHeight: isMobile ? "calc(100vh - 240px)" : "100%",
+        }}
+      >
         <AnimatePresence>
           {messages.length > 0 ? (
             <motion.div
@@ -801,7 +998,9 @@ export default function ChatInterface({
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05, duration: 0.2 }}
-                  className={editingMessage?.id === message.id ? "relative" : ""}
+                  className={
+                    editingMessage?.id === message.id ? "relative" : ""
+                  }
                 >
                   {editingMessage?.id === message.id && (
                     <div className="absolute -left-2 -right-2 -top-2 -bottom-2 rounded-lg border-2 border-indigo-400 dark:border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/20 pointer-events-none" />
@@ -812,16 +1011,20 @@ export default function ChatInterface({
                     onDelete={() => handleDeleteMessage(message.id)}
                     onRecall={() => handleRecallMessage(message.id)}
                     onEdit={() => {
-                      setEditingMessage(message)
-                      setMessageText(message.text)
-                      if (message.richText) {
-                        setRichText(message.richText)
-                        setIsUsingRichText(true)
-                      } else {
-                        setIsUsingRichText(false)
+                      // Only allow editing if user is admin
+                      if (isAdmin) {
+                        setEditingMessage(message);
+                        setMessageText(message.text);
+                        if (message.richText) {
+                          setRichText(message.richText);
+                          setIsUsingRichText(true);
+                        } else {
+                          setIsUsingRichText(false);
+                        }
                       }
                     }}
                     participantsInfo={selectedChat.participantsInfo}
+                    isAdmin={isAdmin}
                   />
                 </motion.div>
               ))}
@@ -834,7 +1037,9 @@ export default function ChatInterface({
               className="flex items-center justify-center h-full"
             >
               <div className="text-center p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-                <p className="text-gray-500 dark:text-gray-400">No messages yet. Start the conversation!</p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  No messages yet. Start the conversation!
+                </p>
               </div>
             </motion.div>
           )}
@@ -865,12 +1070,14 @@ export default function ChatInterface({
                   )}
                 </Button>
                 <div>
-                  <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Audio Recording</p>
+                  <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                    Audio Recording
+                  </p>
                   <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">
                     {audioPreviewRef.current?.duration
-                      ? `${Math.floor(audioPreviewRef.current.duration / 60)}:${Math.floor(
-                          audioPreviewRef.current.duration % 60,
-                        )
+                      ? `${Math.floor(
+                          audioPreviewRef.current.duration / 60
+                        )}:${Math.floor(audioPreviewRef.current.duration % 60)
                           .toString()
                           .padStart(2, "0")}`
                       : "00:00"}
@@ -890,16 +1097,16 @@ export default function ChatInterface({
                   size="sm"
                   onClick={() => {
                     // Store the current URL to revoke it
-                    const urlToRevoke = audioPreviewUrl
+                    const urlToRevoke = audioPreviewUrl;
 
                     // Clear state first
-                    setAudioPreviewUrl(null)
-                    setAudioChunks([])
-                    setIsAudioPlaying(false)
+                    setAudioPreviewUrl(null);
+                    setAudioChunks([]);
+                    setIsAudioPlaying(false);
 
                     // Then revoke the URL
                     if (urlToRevoke) {
-                      URL.revokeObjectURL(urlToRevoke)
+                      URL.revokeObjectURL(urlToRevoke);
                     }
                   }}
                   className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
@@ -956,7 +1163,9 @@ export default function ChatInterface({
                         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
                           <div className="text-white text-center">
                             <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                            <span className="text-xs mt-1 block">{Math.round(attachment.progress)}%</span>
+                            <span className="text-xs mt-1 block">
+                              {Math.round(attachment.progress)}%
+                            </span>
                           </div>
                         </div>
                       )}
@@ -970,7 +1179,9 @@ export default function ChatInterface({
                         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
                           <div className="text-white text-center">
                             <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                            <span className="text-xs mt-1 block">{Math.round(attachment.progress)}%</span>
+                            <span className="text-xs mt-1 block">
+                              {Math.round(attachment.progress)}%
+                            </span>
                           </div>
                         </div>
                       )}
@@ -984,7 +1195,9 @@ export default function ChatInterface({
                         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
                           <div className="text-white text-center">
                             <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                            <span className="text-xs mt-1 block">{Math.round(attachment.progress)}%</span>
+                            <span className="text-xs mt-1 block">
+                              {Math.round(attachment.progress)}%
+                            </span>
                           </div>
                         </div>
                       )}
@@ -995,14 +1208,14 @@ export default function ChatInterface({
                   className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition-colors"
                   onClick={() => {
                     // Store the URL to revoke
-                    const urlToRevoke = attachment.localUrl
+                    const urlToRevoke = attachment.localUrl;
 
                     // Remove the attachment
-                    setAttachments(attachments.filter((_, i) => i !== index))
+                    setAttachments(attachments.filter((_, i) => i !== index));
 
                     // Revoke the URL if it exists
                     if (urlToRevoke) {
-                      URL.revokeObjectURL(urlToRevoke)
+                      URL.revokeObjectURL(urlToRevoke);
                     }
                   }}
                 >
@@ -1019,7 +1232,9 @@ export default function ChatInterface({
         <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 border-t border-indigo-100 dark:border-indigo-800 flex items-center justify-between">
           <div className="flex items-center">
             <Edit className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mr-2" />
-            <span className="text-sm text-indigo-700 dark:text-indigo-300">Editing message</span>
+            <span className="text-sm text-indigo-700 dark:text-indigo-300">
+              Editing message
+            </span>
           </div>
           <Button
             variant="ghost"
@@ -1044,7 +1259,9 @@ export default function ChatInterface({
           <RichTextEditor
             value={richText}
             onChange={setRichText}
-            onEnterPress={editingMessage ? handleEditMessage : handleSendMessage}
+            onEnterPress={
+              editingMessage ? handleEditMessage : handleSendMessage
+            }
           />
         ) : (
           <Textarea
@@ -1055,8 +1272,8 @@ export default function ChatInterface({
             rows={isMobile ? 2 : 3}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                editingMessage ? handleEditMessage() : handleSendMessage()
+                e.preventDefault();
+                editingMessage ? handleEditMessage() : handleSendMessage();
               }
             }}
           />
@@ -1078,7 +1295,9 @@ export default function ChatInterface({
               ref={fileInputRef}
               className="hidden"
               multiple
-              onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+              onChange={(e) =>
+                e.target.files && handleFileUpload(e.target.files)
+              }
             />
 
             {!isMobile && (
@@ -1088,7 +1307,9 @@ export default function ChatInterface({
                 onClick={() => setIsUsingRichText(!isUsingRichText)}
                 type="button"
                 className={`text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800 ${
-                  isUsingRichText ? "bg-indigo-50 text-indigo-600 dark:bg-gray-800 dark:text-indigo-400" : ""
+                  isUsingRichText
+                    ? "bg-indigo-50 text-indigo-600 dark:bg-gray-800 dark:text-indigo-400"
+                    : ""
                 }`}
               >
                 <Edit className="h-5 w-5" />
@@ -1111,7 +1332,9 @@ export default function ChatInterface({
               onClick={() => setIsRecording(!isRecording)}
               type="button"
               className={`text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800 ${
-                isRecording ? "bg-red-50 text-red-500 dark:bg-red-900/30 dark:text-red-400" : ""
+                isRecording
+                  ? "bg-red-50 text-red-500 dark:bg-red-900/30 dark:text-red-400"
+                  : ""
               }`}
               disabled={!!audioPreviewUrl} // Disable recording button if there's already a preview
             >
@@ -1130,8 +1353,15 @@ export default function ChatInterface({
             )}
 
             {isEmojiPickerOpen && (
-              <div className={`absolute ${isMobile ? "bottom-16 left-0 right-0 mx-auto" : "bottom-20"} z-10`}>
-                <EmojiPicker onSelect={handleAddEmoji} onClose={() => setIsEmojiPickerOpen(false)} />
+              <div
+                className={`absolute ${
+                  isMobile ? "bottom-16 left-0 right-0 mx-auto" : "bottom-20"
+                } z-10`}
+              >
+                <EmojiPicker
+                  onSelect={handleAddEmoji}
+                  onClose={() => setIsEmojiPickerOpen(false)}
+                />
               </div>
             )}
           </div>
@@ -1140,7 +1370,9 @@ export default function ChatInterface({
             onClick={editingMessage ? handleEditMessage : handleSendMessage}
             type="button"
             disabled={
-              (!messageText.trim() && !richText.trim() && attachments.length === 0) ||
+              (!messageText.trim() &&
+                !richText.trim() &&
+                attachments.length === 0) ||
               attachments.some((att) => att.isUploading)
             }
             className="bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-700 dark:hover:bg-indigo-800"
@@ -1151,10 +1383,17 @@ export default function ChatInterface({
       </motion.div>
 
       {/* Audio notification */}
-      <audio ref={audioNotificationRef} src="/notification.mp3" className="hidden" />
+      <audio
+        ref={audioNotificationRef}
+        src="/notification.mp3"
+        className="hidden"
+      />
 
       {/* Settings Panel */}
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
-  )
+  );
 }

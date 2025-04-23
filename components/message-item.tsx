@@ -20,6 +20,7 @@ interface MessageItemProps {
       photoURL: string
     }
   }
+  isAdmin: boolean
 }
 
 export default function MessageItem({
@@ -29,6 +30,7 @@ export default function MessageItem({
   onRecall,
   onEdit,
   participantsInfo,
+  isAdmin,
 }: MessageItemProps) {
   const [isPlaying, setIsPlaying] = useState<{ [key: string]: boolean }>({})
   const [audioElements, setAudioElements] = useState<{ [key: string]: HTMLAudioElement }>({})
@@ -224,7 +226,8 @@ export default function MessageItem({
 
         {renderAttachments()}
 
-        {message.edited && (
+        {/* Only show "edited" tag if the user is an admin */}
+        {message.edited && isAdmin && (
           <span
             className={`text-xs ml-1 ${isOwnMessage ? "text-white/70 dark:text-white/70" : "text-gray-500 dark:text-gray-400"}`}
           >
@@ -264,13 +267,16 @@ export default function MessageItem({
                   align="end"
                   className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
                 >
-                  <DropdownMenuItem
-                    onClick={onEdit}
-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 focus:bg-gray-100 dark:focus:bg-gray-800"
-                  >
-                    <Edit className="h-4 w-4 mr-2 text-indigo-500 dark:text-indigo-400" />
-                    <span>Edit</span>
-                  </DropdownMenuItem>
+                  {/* Only show edit option for admin users */}
+                  {isAdmin && (
+                    <DropdownMenuItem
+                      onClick={onEdit}
+                      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 focus:bg-gray-100 dark:focus:bg-gray-800"
+                    >
+                      <Edit className="h-4 w-4 mr-2 text-indigo-500 dark:text-indigo-400" />
+                      <span>Edit</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     onClick={onDelete}
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 focus:bg-gray-100 dark:focus:bg-gray-800"

@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore"
 import UserList from "@/components/user-list"
 import ChatInterface from "@/components/chat-interface"
+import RoleSelector from "@/components/role-selector"
 import type { User } from "@/types/user"
 import type { Chat } from "@/types/chat"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 
 export default function ChatPage() {
-  const { user } = useAuth()
+  const { user, userRole } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [chats, setChats] = useState<Chat[]>([])
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
@@ -28,22 +29,42 @@ export default function ChatPage() {
     setShowUserList(!isMobile || (isMobile && !selectedChat))
   }, [isMobile, selectedChat])
 
-  // Fetch all users
+  // Fetch users based on role
   useEffect(() => {
-    if (!user) return
+    if (!user || !userRole) return
 
-    const q = query(collection(db, "users"), where("uid", "!=", user.uid))
+    let usersQuery;
+    
+    if (userRole === "admin") {
+      // Admin can see all regular users
+      usersQuery = query(
+        collection(db, "users"), 
+        where("uid", "!=", user.uid),
+        where("role", "==", "user")
+      );
+    } else {
+      // Regular users can only see admins
+      usersQuery = query(
+        collection(db, "users"), 
+        where("uid", "!=", user.uid),
+        where("role", "==", "admin")
+      );
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
       const usersList: User[] = []
       snapshot.forEach((doc) => {
-        usersList.push({ id: doc.id, ...doc.data() } as User)
+        const userData = doc.data();
+        // Make sure the data has the required User fields
+        if (userData && userData.uid) {
+          usersList.push({ ...userData, id: doc.id } as unknown as User)
+        }
       })
       setUsers(usersList)
     })
 
     return () => unsubscribe()
-  }, [user])
+  }, [user, userRole])
 
   // Fetch user's chats
   useEffect(() => {
@@ -83,6 +104,11 @@ export default function ChatPage() {
 
   const handleBackToList = () => {
     setShowUserList(true)
+  }
+
+  // If user has no role yet, show role selector
+  if (user && !userRole) {
+    return <RoleSelector />
   }
 
   return (
@@ -137,7 +163,7 @@ export default function ChatPage() {
                 isMobile={isMobile}
               />
             </ResizablePanel>
-            <ResizableHandle withHandle />
+            <ResizableHandle className="w-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" />
             <ResizablePanel defaultSize={75}>
               <ChatInterface
                 selectedChat={selectedChat}

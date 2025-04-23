@@ -3,7 +3,7 @@ import type { Timestamp } from "firebase/firestore"
 export type MessageStatus = "sent" | "delivered" | "read" | "edited" | "deleted" | "recalled"
 
 export interface Attachment {
-  type: "image" | "audio" | "file" | "sticker"
+  type: "image" | "audio" | "file" | "sticker" | "video"
   url: string
   name: string
   size?: number

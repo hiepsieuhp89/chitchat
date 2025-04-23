@@ -16,22 +16,27 @@ import { useRouter } from "next/navigation"
 
 type AuthContextType = {
   user: User | null
+  userRole: "admin" | "user" | null
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
+  setUserRole: (role: "admin" | "user") => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  userRole: null,
   loading: true,
   signInWithGoogle: async () => {},
   signOut: async () => {},
+  setUserRole: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
+  const [userRole, setUserRole] = useState<"admin" | "user" | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -65,9 +70,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             },
             { merge: true },
           )
+          
+          // Get the user role if exists
+          const userData = userSnap.data();
+          if (userData && userData.role) {
+            setUserRole(userData.role);
+          }
         }
       } else {
         setUser(null)
+        setUserRole(null)
       }
       setLoading(false)
     })
@@ -106,5 +118,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }
 
-  return <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>{children}</AuthContext.Provider>
+  const updateUserRole = async (role: "admin" | "user") => {
+    if (!user) return;
+    
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { role }, { merge: true });
+      setUserRole(role);
+    } catch (error) {
+      console.error("Error setting user role:", error);
+    }
+  }
+
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        userRole,
+        loading, 
+        signInWithGoogle, 
+        signOut,
+        setUserRole: updateUserRole
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
