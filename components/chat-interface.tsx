@@ -45,9 +45,11 @@ import {
   Video,
   X,
   XCircle,
+  GamepadIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { createEmptyBoard } from "@/lib/tictactoe";
 
 interface ChatInterfaceProps {
   selectedChat: Chat | null;
@@ -690,7 +692,6 @@ export default function ChatInterface({
         url: localUrl,
         name: file.name,
         size: file.size,
-        mimeType: file.type,
         isUploading: true,
         progress: 0,
         localUrl,
@@ -789,7 +790,6 @@ export default function ChatInterface({
       url: localUrl,
       name: fileName,
       size: audioBlob.size,
-      mimeType: "audio/webm",
       isUploading: true,
       progress: 0,
       localUrl,
@@ -889,6 +889,70 @@ export default function ChatInterface({
 
   const otherParticipant = getOtherParticipantInfo();
 
+  // Add a function to create and send a TicTacToe game
+  const handleCreateTicTacToeGame = async () => {
+    if (!user || !selectedChat) return;
+
+    try {
+      // Create a new tic-tac-toe game
+      const newGame = {
+        // Store the board as a JSON string instead of nested arrays
+        board: JSON.stringify(createEmptyBoard()),
+        currentTurn: "X", // X always goes first
+        players: {
+          X: user.uid,
+          O: null,
+        },
+        winner: null,
+        status: "waiting",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: user.uid,
+      };
+
+      // Add the game to Firestore
+      const gameRef = await addDoc(collection(db, "tictactoe"), newGame);
+
+      // Create message with game reference
+      const messageData: any = {
+        chatId: selectedChat.id,
+        sender: user.uid,
+        text: "I've started a Tic Tac Toe game! Join to play!",
+        status: "sent",
+        readBy: [user.uid],
+        tictactoeGameId: gameRef.id,
+      };
+
+      // Add the message to the chat
+      await addDoc(collection(db, "messages"), {
+        ...messageData,
+        timestamp: serverTimestamp(),
+      });
+
+      // Update last message in chat
+      const chatRef = doc(db, "chats", selectedChat.id);
+      await updateDoc(chatRef, {
+        lastMessage: {
+          text: "TicTacToe game",
+          sender: user.uid,
+          timestamp: serverTimestamp(),
+          read: false,
+        },
+        updatedAt: serverTimestamp(),
+      });
+
+      // Scroll to bottom
+      setShouldScrollToBottom(true);
+    } catch (error) {
+      console.error("Error creating TicTacToe game:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create a TicTacToe game. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!selectedChat) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -965,14 +1029,16 @@ export default function ChatInterface({
           </div>
         )}
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsSettingsOpen(true)}
-          className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800"
-        >
-          <Settings className="h-5 w-5" />
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsSettingsOpen(true)}
+            className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+        </div>
       </motion.div>
 
       {/* Messages */}
@@ -1324,6 +1390,17 @@ export default function ChatInterface({
               className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800"
             >
               <Smile className="h-5 w-5" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCreateTicTacToeGame}
+              type="button"
+              className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-800"
+              title="Start a Tic Tac Toe game"
+            >
+              <GamepadIcon className="h-5 w-5" />
             </Button>
 
             <Button

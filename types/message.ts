@@ -3,12 +3,12 @@ import type { Timestamp } from "firebase/firestore"
 export type MessageStatus = "sent" | "delivered" | "read" | "edited" | "deleted" | "recalled"
 
 export interface Attachment {
-  type: "image" | "audio" | "file" | "sticker" | "video"
   url: string
-  name: string
+  type: "image" | "video" | "audio" | "file"
+  name?: string
   size?: number
-  mimeType?: string
-  duration?: number // for audio
+  duration?: number // For audio/video
+  thumbnailUrl?: string // For images/videos
 }
 
 export interface Message {
@@ -26,4 +26,5 @@ export interface Message {
   readBy: string[]
   edited?: boolean
   editedAt?: Timestamp
+  tictactoeGameId?: string // ID of a tic-tac-toe game associated with this message
 }

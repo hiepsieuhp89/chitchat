@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreVertical, Edit, Trash, RotateCcw, Check, File, Play, Pause } from "lucide-react"
 import { format } from "date-fns"
 import { motion } from "framer-motion"
+import InChatTicTacToe from "@/components/tictactoe/in-chat-tictactoe"
 
 interface MessageItemProps {
   message: Message
@@ -222,6 +223,16 @@ export default function MessageItem({
           <p className={isOwnMessage ? "text-white dark:text-white" : "text-gray-800 dark:text-gray-100"}>
             {message.text}
           </p>
+        )}
+
+        {/* Render TicTacToe game if this message has a game ID */}
+        {message.tictactoeGameId && (
+          <div className="mt-2">
+            <InChatTicTacToe 
+              gameId={message.tictactoeGameId} 
+              isOwnMessage={isOwnMessage}
+            />
+          </div>
         )}
 
         {renderAttachments()}

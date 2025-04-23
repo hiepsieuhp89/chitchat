@@ -15,15 +15,13 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
-        admin: 
-          "border-transparent bg-indigo-500 text-white hover:bg-indigo-600",
-        user:
-          "border-transparent bg-green-500 text-white hover:bg-green-600",
+        admin: "border-transparent bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
+        user: "border-transparent bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
       },
       size: {
         default: "px-2.5 py-0.5 text-xs",
-        sm: "px-2 py-0.5 text-[10px]",
-        lg: "px-3 py-1 text-sm",
+        sm: "px-1.5 py-0.25 text-xs",
+        lg: "px-3 py-0.75 text-sm",
       },
     },
     defaultVariants: {
